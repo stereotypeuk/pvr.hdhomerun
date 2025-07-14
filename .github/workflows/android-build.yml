@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ghcr.io/xbmc/xbmc-addon-builder:android-arm64
+    container: ghcr.io/linuxserver/docker-kodi-android
 
     steps:
       - name: Checkout
