@@ -1,48 +1,50 @@
 name: Build Android ARM64 Addon
 
 on:
-  workflow_dispatch:      # trigger manually
+  workflow_dispatch:    # run manually from the Actions tab
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout the addon source (Piers branch) with submodules
-      - name: Checkout addon
+      # 1. Checkout the Piers branch (submodules included)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 2. Patch the guide URL
+      # 2. Patch the guide URL (my → api)
       - name: Patch guide URL
         run: |
           sed -i 's~https://my.hdhomerun.com~https://api.hdhomerun.com~g' src/HDHomeRunTuners.cpp
 
-      # 3. Install build deps and Android NDK r26d
-      - name: Install build tools & NDK
+      # 3. Install basic build tools + Android NDK r26d
+      - name: Install toolchain + NDK
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y ninja-build cmake curl unzip gcc g++ make pkg-config gettext automake autoconf libtool
+          sudo apt-get install -y ninja-build cmake curl unzip gcc g++ make \
+                                  pkg-config gettext autoconf automake libtool
           curl -sSL https://dl.google.com/android/repository/android-ndk-r26d-linux.zip -o ndk.zip
           unzip -q ndk.zip -d $HOME
           echo "ANDROID_NDK_HOME=$HOME/android-ndk-r26d" >> $GITHUB_ENV
           echo "$HOME/android-ndk-r26d/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      # 4. Clone Kodi core (shallow) for depends
-      - name: Clone Kodi core
+      # 4. Clone Kodi core (shallow) just to build "depends"
+      - name: Clone Kodi core (Omega, shallow)
         run: |
           git clone --depth 1 --branch Omega https://github.com/xbmc/xbmc.git kodi-core
 
       # 5. Bootstrap and build Android‑arm64 depends
-      - name: Bootstrap & build depends
+      - name: Build Kodi Android depends
         run: |
           cd kodi-core/tools/depends
-          ./bootstrap                      # generates Makefile.include
+          ./bootstrap               # generates Makefile.include
+          ./configure               # creates proper Makefiles
           make -j$(nproc) PLATFORM=android ARCH=arm64 PREFIX=$HOME/kodi-sdk
 
-      # 6. Configure & build the addon
-      - name: Build pvr.hdhomerun
+      # 6. Configure & build the addon with freshly‑built SDK
+      - name: Build pvr.hdhomerun addon
         run: |
           mkdir build && cd build
           cmake .. \
@@ -56,12 +58,12 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_PYTHON=OFF
           ninja
-          ninja package                    # creates pvr.hdhomerun-*.zip
+          ninja package             # => pvr.hdhomerun-*.zip
 
-      # 7. Upload the ZIP artifact
-      - name: Upload ZIP
+      # 7. Upload the finished ZIP artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pvr-hdhomerun-android-arm64
+          name: pvr.hdhomerun-android-arm64
           path: build/pvr.hdhomerun-*.zip
-          retention-days: 7
+          retention-days: 14
